@@ -1,0 +1,253 @@
+/* ═══ YouTube Music Downloader — Extension Popup ═══ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    width: 340px;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0d0d14;
+    color: #f0f0f5;
+}
+
+.popup {
+    padding: 16px;
+}
+
+/* ─── Header ───────────────────────── */
+.popup-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.popup-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.popup-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    flex: 1;
+}
+
+.server-status {
+    flex-shrink: 0;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    transition: background 0.3s;
+}
+
+.status-dot.online {
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34,197,94,0.5);
+}
+
+.status-dot.offline {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239,68,68,0.5);
+}
+
+/* ─── Song Info ────────────────────── */
+.song-info {
+    padding: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    margin-bottom: 14px;
+}
+
+.song-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.song-meta {
+    font-size: 0.72rem;
+    color: #8888a0;
+    margin-top: 4px;
+}
+
+/* ─── Action Buttons ───────────────── */
+.popup-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.popup-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.popup-btn.primary {
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    color: white;
+    box-shadow: 0 4px 15px rgba(168,85,247,0.3);
+}
+
+.popup-btn.primary:hover {
+    box-shadow: 0 6px 25px rgba(168,85,247,0.45);
+    transform: translateY(-1px);
+}
+
+.popup-btn.secondary {
+    background: rgba(255,255,255,0.06);
+    color: #f0f0f5;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.popup-btn.secondary:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.2);
+}
+
+.popup-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.popup-btn .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Folder Row ───────────────────── */
+.folder-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 0.72rem;
+    color: #8888a0;
+}
+
+.folder-row svg {
+    color: #eab308;
+    flex-shrink: 0;
+}
+
+.folder-row span {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folder-btn {
+    background: none;
+    border: 1px solid rgba(168,85,247,0.3);
+    color: #a855f7;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.68rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.folder-btn:hover {
+    background: rgba(168,85,247,0.1);
+    border-color: #a855f7;
+}
+
+/* ─── Feedback ─────────────────────── */
+.popup-feedback {
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    margin-bottom: 12px;
+    animation: slideIn 0.25s ease;
+}
+
+.popup-feedback.success {
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.25);
+    color: #22c55e;
+}
+
+.popup-feedback.error {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.25);
+    color: #ef4444;
+}
+
+.popup-feedback.info {
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.25);
+    color: #3b82f6;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Dashboard Link ───────────────── */
+.dashboard-link {
+    display: block;
+    text-align: center;
+    padding: 8px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #8888a0;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.dashboard-link:hover {
+    color: #a855f7;
+    background: rgba(168,85,247,0.06);
+}
