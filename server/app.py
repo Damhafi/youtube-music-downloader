@@ -272,6 +272,10 @@ def start_download():
     if not url:
         return jsonify({"error": "URL is required"}), 400
 
+    # If single track mode, clean URL to isolate current video only
+    if not playlist_mode:
+        url = url.split("&list=")[0].split("&index=")[0]
+
     # Use provided dir, or saved config, or default
     if not download_dir:
         cfg = load_config()

@@ -218,11 +218,12 @@ async function download(playlistMode) {
             }
         } else {
             // Standard single-track or URL-based playlist download
+            const targetUrl = playlistMode ? tabUrl : tabUrl.split("&list=")[0].split("&index=")[0];
             const res = await fetch(`${API}/download`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    url: tabUrl,
+                    url: targetUrl,
                     playlist: playlistMode,
                 }),
             });
