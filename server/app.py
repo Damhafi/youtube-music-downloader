@@ -80,11 +80,12 @@ def run_download(download_id, url, download_dir, playlist_mode=False):
 
         cmd = [
             sys.executable, "-m", "yt_dlp",
+            "-f", "bestaudio/best",
             "--extract-audio",
             "--audio-format", "mp3",
-            "--audio-quality", "0",  # Best quality (VBR ~320kbps)
-            "--embed-thumbnail",     # Embed cover art
-            "--add-metadata",        # Add metadata (title, artist, etc.)
+            "--audio-quality", "0",  # Highest possible MP3 quality (320kbps target)
+            "--embed-thumbnail",     # Embed HD cover art
+            "--add-metadata",        # Add full ID3 metadata tags
             "--parse-metadata", "%(title)s:%(meta_title)s",
             "--output", output_template,
             "--no-overwrites",
