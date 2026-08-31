@@ -179,7 +179,7 @@ function renderDownloads(downloads) {
     }
 
     // Sort: active first, then completed, then errors
-    const order = { downloading: 0, queued: 1, completed: 2, error: 3, cancelled: 4 };
+    const order = { downloading: 0, retrying: 1, queued: 2, completed: 3, skipped: 4, error: 5, cancelled: 6 };
     downloads.sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5));
 
     const activeCount = downloads.filter(d => d.status === "downloading" || d.status === "queued").length;
@@ -232,6 +232,10 @@ function getStatusIcon(status) {
             <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
         </svg>`,
         queued: `<div class="spinner"></div>`,
+        retrying: `<div class="spinner" style="border-top-color: #f97316"></div>`,
+        skipped: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/>
+        </svg>`,
         cancelled: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
         </svg>`,
@@ -251,6 +255,10 @@ function getStatusText(dl) {
             return `❌ Erro: ${dl.error || "desconhecido"}`;
         case "queued":
             return "⏳ Na fila...";
+        case "retrying":
+            return `🔄 Tentando novamente... ${dl.error || ""}`;
+        case "skipped":
+            return "⏭ Já baixado anteriormente";
         case "cancelled":
             return "⏹ Cancelado";
         default:

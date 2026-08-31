@@ -13,6 +13,7 @@ server/ffmpeg/
 
 # Config with user paths
 server/config.json
+server/.download_history.txt
 
 # OS
 .DS_Store

@@ -2,11 +2,12 @@
     "manifest_version": 3,
     "name": "YouTube Music Downloader",
     "description": "Baixe músicas e playlists do YouTube como MP3 320kbps com um clique",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "permissions": [
         "activeTab",
         "tabs",
-        "scripting"
+        "scripting",
+        "notifications"
     ],
     "host_permissions": [
         "http://127.0.0.1:5000/*"

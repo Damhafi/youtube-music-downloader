@@ -1,17 +1,20 @@
 """
 YouTube Music Downloader — Servidor Local
 Recebe URLs do YouTube via extensão Chrome e baixa como MP3 320kbps com capa.
+v1.1 — ThreadPool, retry, dedup, batch progress
 """
 
 import json
 import os
 import sys
 import threading
+import time
 import uuid
 import subprocess
 import tkinter as tk
 from tkinter import filedialog
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -20,6 +23,7 @@ from flask_cors import CORS
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
 DEFAULT_DOWNLOAD_DIR = str(Path.home() / "Music" / "YouTube Downloads")
+DOWNLOAD_ARCHIVE = Path(__file__).parent / ".download_history.txt"
 
 def load_config():
     if CONFIG_FILE.exists():
@@ -38,6 +42,9 @@ CORS(app)
 
 # In-memory download state
 downloads = {}  # id -> {status, progress, title, error, ...}
+
+# Thread pool: max 3 simultaneous downloads to avoid overloading
+download_pool = ThreadPoolExecutor(max_workers=3)
 
 # ─── FFmpeg locator ────────────────────────────────────────────────────────────
 
@@ -67,106 +74,138 @@ FFMPEG_DIR = find_ffmpeg()
 
 # ─── yt-dlp Download Logic ────────────────────────────────────────────────────
 
+MAX_RETRIES = 2
+
 def run_download(download_id, url, download_dir, playlist_mode=False):
-    """Run yt-dlp in a subprocess to download audio as MP3 320kbps with cover art."""
-    try:
-        downloads[download_id]["status"] = "downloading"
+    """Run yt-dlp in a subprocess to download audio as MP3 320kbps with cover art.
+    Includes retry logic (up to MAX_RETRIES extra attempts) and dedup via archive."""
 
-        # Ensure output directory exists
-        os.makedirs(download_dir, exist_ok=True)
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            downloads[download_id]["status"] = "downloading"
 
-        # Build yt-dlp command
-        output_template = os.path.join(download_dir, "%(title)s.%(ext)s")
+            if attempt > 0:
+                downloads[download_id]["info"] = f"🔄 Tentativa {attempt + 1} de {MAX_RETRIES + 1}..."
+                downloads[download_id]["progress"] = 0
 
-        cmd = [
-            sys.executable, "-m", "yt_dlp",
-            "-f", "bestaudio/best",
-            "--extract-audio",
-            "--audio-format", "mp3",
-            "--audio-quality", "0",  # Highest possible MP3 quality (320kbps target)
-            "--embed-thumbnail",     # Embed HD cover art
-            "--add-metadata",        # Add full ID3 metadata tags
-            "--parse-metadata", "%(title)s:%(meta_title)s",
-            "--output", output_template,
-            "--no-overwrites",
-            "--progress",
-            "--newline",             # Progress on new lines for parsing
-        ]
+            # Ensure output directory exists
+            os.makedirs(download_dir, exist_ok=True)
 
-        if playlist_mode:
-            cmd.append("--yes-playlist")
-        else:
-            cmd.append("--no-playlist")
+            # Build yt-dlp command
+            output_template = os.path.join(download_dir, "%(title)s.%(ext)s")
 
-        # If ffmpeg found in custom location
-        if FFMPEG_DIR:
-            cmd.extend(["--ffmpeg-location", FFMPEG_DIR])
+            cmd = [
+                sys.executable, "-m", "yt_dlp",
+                "-f", "bestaudio/best",
+                "--extract-audio",
+                "--audio-format", "mp3",
+                "--audio-quality", "0",  # Highest possible MP3 quality (320kbps target)
+                "--embed-thumbnail",     # Embed HD cover art
+                "--add-metadata",        # Add full ID3 metadata tags
+                "--parse-metadata", "%(title)s:%(meta_title)s",
+                "--output", output_template,
+                "--no-overwrites",
+                "--download-archive", str(DOWNLOAD_ARCHIVE),  # Dedup: skip already downloaded
+                "--progress",
+                "--newline",             # Progress on new lines for parsing
+            ]
 
-        cmd.append(url)
+            if playlist_mode:
+                cmd.append("--yes-playlist")
+            else:
+                cmd.append("--no-playlist")
 
-        # Run the process
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-        )
+            # If ffmpeg found in custom location
+            if FFMPEG_DIR:
+                cmd.extend(["--ffmpeg-location", FFMPEG_DIR])
 
-        downloads[download_id]["pid"] = process.pid
+            cmd.append(url)
 
-        total_items = 1
-        current_item = 0
+            # Run the process
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            )
 
-        for line in process.stdout:
-            line = line.strip()
-            if not line:
+            downloads[download_id]["pid"] = process.pid
+
+            total_items = 1
+            current_item = 0
+            was_skipped = False
+
+            for line in process.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Detect skipped (already in archive)
+                if "has already been recorded in the archive" in line or "has already been downloaded" in line:
+                    was_skipped = True
+
+                # Parse download progress
+                if "[download]" in line:
+                    if "Downloading item" in line:
+                        # Playlist progress: "Downloading item X of Y"
+                        try:
+                            parts = line.split("Downloading item")[1].strip().split(" of ")
+                            current_item = int(parts[0])
+                            total_items = int(parts[1])
+                            downloads[download_id]["playlist_progress"] = f"{current_item}/{total_items}"
+                        except (IndexError, ValueError):
+                            pass
+                    elif "%" in line and "ETA" in line:
+                        # Individual file progress
+                        try:
+                            pct = line.split("%")[0].split()[-1]
+                            downloads[download_id]["progress"] = float(pct)
+                        except (IndexError, ValueError):
+                            pass
+                    elif "Destination:" in line:
+                        filename = line.split("Destination:")[-1].strip()
+                        downloads[download_id]["current_file"] = os.path.basename(filename)
+
+                # Parse title
+                if "[info]" in line and "Extracting URL" not in line:
+                    downloads[download_id]["info"] = line
+
+            process.wait()
+
+            if process.returncode == 0:
+                if was_skipped:
+                    downloads[download_id]["status"] = "skipped"
+                    downloads[download_id]["info"] = "⏭ Já baixado anteriormente"
+                    downloads[download_id]["progress"] = 100
+                else:
+                    downloads[download_id]["status"] = "completed"
+                    downloads[download_id]["progress"] = 100
+                return  # Success — no retry needed
+            else:
+                # Download failed — retry if attempts remain
+                if attempt < MAX_RETRIES:
+                    downloads[download_id]["status"] = "retrying"
+                    downloads[download_id]["error"] = f"Falhou, tentando novamente em 3s..."
+                    time.sleep(3)
+                    continue
+                else:
+                    downloads[download_id]["status"] = "error"
+                    downloads[download_id]["error"] = f"yt-dlp falhou após {MAX_RETRIES + 1} tentativas (code {process.returncode})"
+                    return
+
+        except Exception as e:
+            if attempt < MAX_RETRIES:
+                downloads[download_id]["status"] = "retrying"
+                downloads[download_id]["error"] = f"Erro: {str(e)}, tentando novamente..."
+                time.sleep(3)
                 continue
-
-            # Parse download progress
-            if "[download]" in line:
-                if "Downloading item" in line:
-                    # Playlist progress: "Downloading item X of Y"
-                    try:
-                        parts = line.split("Downloading item")[1].strip().split(" of ")
-                        current_item = int(parts[0])
-                        total_items = int(parts[1])
-                        downloads[download_id]["playlist_progress"] = f"{current_item}/{total_items}"
-                    except (IndexError, ValueError):
-                        pass
-                elif "%" in line and "ETA" in line:
-                    # Individual file progress
-                    try:
-                        pct = line.split("%")[0].split()[-1]
-                        downloads[download_id]["progress"] = float(pct)
-                    except (IndexError, ValueError):
-                        pass
-                elif "Destination:" in line:
-                    filename = line.split("Destination:")[-1].strip()
-                    downloads[download_id]["current_file"] = os.path.basename(filename)
-
-            # Parse title
-            if "[info]" in line and "Extracting URL" not in line:
-                downloads[download_id]["info"] = line
-
-            # Detect title from metadata
-            if "title" in line.lower() and ":" in line:
-                pass  # yt-dlp handles this
-
-        process.wait()
-
-        if process.returncode == 0:
-            downloads[download_id]["status"] = "completed"
-            downloads[download_id]["progress"] = 100
-        else:
-            downloads[download_id]["status"] = "error"
-            downloads[download_id]["error"] = f"yt-dlp exited with code {process.returncode}"
-
-    except Exception as e:
-        downloads[download_id]["status"] = "error"
-        downloads[download_id]["error"] = str(e)
+            else:
+                downloads[download_id]["status"] = "error"
+                downloads[download_id]["error"] = str(e)
+                return
 
 
 def get_video_info(url):
@@ -245,7 +284,7 @@ def index():
 @app.route("/api/ping", methods=["GET"])
 def ping():
     """Health check — extension uses this to verify server is running."""
-    return jsonify({"status": "ok", "version": "1.0.0"})
+    return jsonify({"status": "ok", "version": "1.1.0"})
 
 
 @app.route("/api/info", methods=["POST"])
@@ -296,13 +335,8 @@ def start_download():
         "playlist": playlist_mode,
     }
 
-    # Run download in background thread
-    thread = threading.Thread(
-        target=run_download,
-        args=(download_id, url, download_dir, playlist_mode),
-        daemon=True,
-    )
-    thread.start()
+    # Submit to thread pool (controlled concurrency — max 3 simultaneous)
+    download_pool.submit(run_download, download_id, url, download_dir, playlist_mode)
 
     return jsonify({"id": download_id, "status": "queued"})
 
@@ -348,13 +382,8 @@ def start_batch_download():
             "playlist": False,
         }
 
-        # Stagger downloads slightly to avoid hammering
-        thread = threading.Thread(
-            target=run_download,
-            args=(download_id, clean_url, download_dir, False),
-            daemon=True,
-        )
-        thread.start()
+        # Submit to thread pool (controlled concurrency instead of all-at-once)
+        download_pool.submit(run_download, download_id, clean_url, download_dir, False)
         queued_ids.append(download_id)
 
     return jsonify({
@@ -370,6 +399,18 @@ def get_progress(download_id):
     if download_id not in downloads:
         return jsonify({"error": "Download not found"}), 404
     return jsonify(downloads[download_id])
+
+
+@app.route("/api/progress-batch", methods=["POST"])
+def get_batch_progress():
+    """Get progress of multiple downloads at once (used by extension popup/content)."""
+    data = request.json
+    ids = data.get("ids", [])
+    result = []
+    for did in ids:
+        if did in downloads:
+            result.append(downloads[did])
+    return jsonify(result)
 
 
 @app.route("/api/downloads", methods=["GET"])
@@ -394,6 +435,17 @@ def cancel_download(download_id):
 
     dl["status"] = "cancelled"
     return jsonify({"status": "cancelled"})
+
+
+@app.route("/api/clear-archive", methods=["POST"])
+def clear_archive():
+    """Clear the download archive to allow re-downloading previously downloaded songs."""
+    try:
+        if DOWNLOAD_ARCHIVE.exists():
+            DOWNLOAD_ARCHIVE.unlink()
+        return jsonify({"status": "ok", "message": "Histórico de downloads limpo. Músicas poderão ser baixadas novamente."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/settings", methods=["GET"])
@@ -455,10 +507,12 @@ if __name__ == "__main__":
         save_config({"download_dir": download_dir})
 
     print("=" * 60)
-    print("  [*] YouTube Music Downloader - Servidor Local")
+    print("  [*] YouTube Music Downloader - Servidor Local v1.1")
     print(f"  [>] Pasta padrao: {download_dir}")
     print(f"  [>] Dashboard: http://localhost:5000")
     print(f"  [>] FFmpeg: {'Encontrado' if FFMPEG_DIR else 'Nao encontrado (necessario para MP3)'}")
+    print(f"  [>] Downloads simultaneos: 3 (ThreadPool)")
+    print(f"  [>] Dedup: {DOWNLOAD_ARCHIVE.name}")
     print("=" * 60)
 
     app.run(host="127.0.0.1", port=5000, debug=False)

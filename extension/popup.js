@@ -1,6 +1,7 @@
 /**
  * YouTube Music Downloader — Extension Popup Logic
  * Detects current YouTube tab, sends download requests to local server.
+ * v1.1 — Active downloads progress tracking inline
  */
 
 const API = "http://127.0.0.1:5000/api";
@@ -14,9 +15,13 @@ const btnDownloadPlaylist = document.getElementById("btnDownloadPlaylist");
 const currentFolder = document.getElementById("currentFolder");
 const btnChangeFolder = document.getElementById("btnChangeFolder");
 const feedback = document.getElementById("feedback");
+const activeDownloadsEl = document.getElementById("activeDownloads");
+const downloadsItems = document.getElementById("downloadsItems");
+const activeBadge = document.getElementById("activeBadge");
 
 let tabUrl = "";
 let isPlaylist = false;
+let pollTimer = null;
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +29,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     await checkServer();
     await detectCurrentTab();
     await loadFolder();
+    
+    // Start continuous live polling while popup is open
+    startProgressPolling();
 
     btnDownloadCurrent.addEventListener("click", () => download(false));
     btnDownloadPlaylist.addEventListener("click", () => download(true));
@@ -177,6 +185,7 @@ async function download(playlistMode) {
                         "ytd-playlist-panel-video-renderer#playlist-items"
                     );
                     const songs = [];
+                    const seen = new Set();
                     items.forEach((item) => {
                         const link = item.querySelector("a#wc-endpoint");
                         const titleEl = item.querySelector("span#video-title");
@@ -184,8 +193,12 @@ async function download(playlistMode) {
                         if (!link || !titleEl) return;
                         const href = link.getAttribute("href");
                         if (!href) return;
+                        const url = "https://www.youtube.com" + href;
+                        const cleanUrl = url.split("&list=")[0].split("&index=")[0];
+                        if (seen.has(cleanUrl)) return;
+                        seen.add(cleanUrl);
                         songs.push({
-                            url: "https://www.youtube.com" + href,
+                            url: url,
                             title: titleEl.textContent.trim(),
                             artist: bylineEl ? bylineEl.textContent.trim() : "",
                         });
@@ -212,9 +225,11 @@ async function download(playlistMode) {
                 showFeedback(`Erro: ${data.error}`, "error");
             } else {
                 showFeedback(
-                    `${data.queued} musicas na fila! Veja o Dashboard.`,
+                    `${data.queued} musicas na fila!`,
                     "success"
                 );
+                // Start tracking progress
+                startProgressPolling();
             }
         } else {
             // Standard single-track or URL-based playlist download
@@ -235,10 +250,12 @@ async function download(playlistMode) {
             } else {
                 showFeedback(
                     playlistMode
-                        ? "Baixando playlist! Veja o progresso no Dashboard."
-                        : "Baixando musica! Verifique a pasta de destino.",
+                        ? "Baixando playlist! Veja o progresso abaixo."
+                        : "Baixando musica!",
                     "success"
                 );
+                // Start tracking progress
+                startProgressPolling();
             }
         }
     } catch {
@@ -247,6 +264,102 @@ async function download(playlistMode) {
         btn.disabled = false;
         btn.innerHTML = originalHTML;
     }
+}
+
+// ─── Active Downloads Progress ────────────────────────────────────────────────
+
+function startProgressPolling() {
+    pollActiveDownloads();
+    if (!pollTimer) {
+        pollTimer = setInterval(pollActiveDownloads, 1000);
+    }
+}
+
+async function pollActiveDownloads() {
+    try {
+        const res = await fetch(`${API}/downloads`, { signal: AbortSignal.timeout(2000) });
+        const all = await res.json();
+
+        // Update server indicator to online
+        if (serverStatus.querySelector(".status-dot").classList.contains("offline")) {
+            serverStatus.querySelector(".status-dot").className = "status-dot online";
+            serverStatus.title = "Servidor online ✅";
+            btnDownloadCurrent.disabled = false;
+            btnDownloadPlaylist.disabled = false;
+        }
+
+        // Show last 10 downloads (most recent first)
+        const recent = all.slice(-10).reverse();
+
+        if (recent.length === 0) {
+            activeDownloadsEl.style.display = "none";
+            return;
+        }
+
+        activeDownloadsEl.style.display = "block";
+        const activeCount = recent.filter(
+            (d) =>
+                d.status === "downloading" ||
+                d.status === "queued" ||
+                d.status === "retrying"
+        ).length;
+        activeBadge.textContent = activeCount;
+
+        downloadsItems.innerHTML = recent
+            .map((dl) => {
+                const icon = getStatusEmoji(dl.status);
+                const name = dl.current_file || dl.url.split("v=").pop().substring(0, 20);
+                const shortName = name.length > 32 ? name.substring(0, 32) + "..." : name;
+                const showProgress = dl.status === "downloading";
+
+                return `
+                <div class="dl-item ${dl.status}">
+                    <span class="dl-icon">${icon}</span>
+                    <div class="dl-info">
+                        <div class="dl-name">${shortName}</div>
+                        ${
+                            showProgress
+                                ? `<div class="dl-progress-bar">
+                                    <div class="dl-progress-fill" style="width:${dl.progress || 0}%"></div>
+                                   </div>`
+                                : `<div class="dl-status-text">${getStatusLabel(dl.status)}</div>`
+                        }
+                    </div>
+                </div>
+            `;
+            })
+            .join("");
+    } catch {
+        // Server might be offline or sleeping
+        serverStatus.querySelector(".status-dot").className = "status-dot offline";
+        serverStatus.title = "Servidor offline ❌";
+    }
+}
+
+function getStatusEmoji(status) {
+    const map = {
+        downloading: "⬇",
+        completed: "✅",
+        error: "❌",
+        queued: "⏳",
+        cancelled: "⏹",
+        retrying: "🔄",
+        skipped: "⏭",
+    };
+    return map[status] || "❓";
+}
+
+function getStatusLabel(status) {
+    const map = {
+        downloading: "Baixando...",
+        completed: "Concluído",
+        error: "Erro",
+        queued: "Na fila",
+        cancelled: "Cancelado",
+        retrying: "Tentando novamente...",
+        skipped: "Já baixado",
+    };
+    return map[status] || status;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -271,4 +384,3 @@ function showFeedback(msg, type = "info") {
         feedback.style.display = "none";
     }, 5000);
 }
-

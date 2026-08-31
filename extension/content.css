@@ -1,4 +1,5 @@
 /* === YouTube Music Downloader - Content Script Styles === */
+/* v1.1 — Selection panel, improved toast */
 
 #ytmd-fab {
     position: fixed;
@@ -143,10 +144,9 @@
     border-radius: 10px;
     font-size: 0.8rem;
     font-weight: 500;
-    white-space: nowrap;
     box-shadow: 0 4px 16px rgba(0,0,0,0.5);
     animation: ytmd-slideUp 0.25s ease;
-    max-width: 320px;
+    max-width: 380px;
     white-space: normal;
 }
 
@@ -166,4 +166,272 @@
     background: rgba(59,130,246,0.15);
     border: 1px solid rgba(59,130,246,0.3);
     color: #3b82f6;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* === Selection Panel Overlay ===                          */
+/* ═══════════════════════════════════════════════════════════ */
+
+#ytmd-selection-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(6px);
+    z-index: 9999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: ytmd-fadeIn 0.2s ease;
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+}
+
+@keyframes ytmd-fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.ytmd-selection-panel {
+    background: #1a1a28;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    width: 480px;
+    max-width: 92vw;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.8);
+    animation: ytmd-slideUp 0.25s ease;
+    overflow: hidden;
+}
+
+/* --- Selection Header --- */
+.ytmd-selection-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.ytmd-selection-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ytmd-selection-icon {
+    font-size: 1.5rem;
+}
+
+.ytmd-selection-title h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #f0f0f5;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.ytmd-selection-title small {
+    font-size: 0.75rem;
+    color: #8888a0;
+    display: block;
+    margin-top: 2px;
+}
+
+.ytmd-selection-close {
+    background: none;
+    border: none;
+    color: #8888a0;
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: all 0.15s;
+    line-height: 1;
+}
+
+.ytmd-selection-close:hover {
+    color: #f0f0f5;
+    background: rgba(255,255,255,0.1);
+}
+
+/* --- Selection Toolbar --- */
+.ytmd-selection-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.ytmd-toolbar-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #c0c0d0;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.ytmd-toolbar-btn:hover {
+    background: rgba(168,85,247,0.15);
+    border-color: rgba(168,85,247,0.3);
+    color: #a855f7;
+}
+
+.ytmd-toolbar-count {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: #8888a0;
+}
+
+/* --- Song List --- */
+.ytmd-selection-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    max-height: 420px;
+}
+
+.ytmd-selection-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ytmd-selection-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ytmd-selection-list::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.15);
+    border-radius: 3px;
+}
+
+.ytmd-selection-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+/* --- Song Item --- */
+.ytmd-song-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+}
+
+.ytmd-song-item:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+/* --- Custom Checkbox --- */
+.ytmd-song-check {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 5px;
+    flex-shrink: 0;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s;
+    background: transparent;
+    margin: 0;
+}
+
+.ytmd-song-check:checked {
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    border-color: transparent;
+}
+
+.ytmd-song-check:checked::after {
+    content: "✓";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.ytmd-song-check:hover {
+    border-color: rgba(168,85,247,0.5);
+}
+
+/* --- Song Info --- */
+.ytmd-song-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.ytmd-song-name {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #f0f0f5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ytmd-song-artist {
+    font-size: 0.7rem;
+    color: #8888a0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* --- Selection Footer --- */
+.ytmd-selection-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.2);
+}
+
+.ytmd-selection-footer span {
+    font-size: 0.78rem;
+    color: #8888a0;
+}
+
+.ytmd-btn-download-sel {
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    border: none;
+    color: white;
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 15px rgba(168,85,247,0.3);
+}
+
+.ytmd-btn-download-sel:hover {
+    box-shadow: 0 6px 25px rgba(168,85,247,0.45);
+    transform: translateY(-1px);
+}
+
+.ytmd-btn-download-sel:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
 }

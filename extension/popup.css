@@ -1,4 +1,5 @@
 /* ═══ YouTube Music Downloader — Extension Popup ═══ */
+/* v1.1 — Active downloads progress section */
 
 * {
     margin: 0;
@@ -233,6 +234,112 @@ body {
     from { opacity: 0; transform: translateY(-6px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ─── Active Downloads ─────────────── */
+.active-downloads {
+    margin-bottom: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    overflow: hidden;
+    animation: slideIn 0.25s ease;
+}
+
+.downloads-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.02);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #8888a0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.downloads-badge {
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    color: white;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+}
+
+.downloads-items {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.downloads-items::-webkit-scrollbar {
+    width: 4px;
+}
+
+.downloads-items::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+}
+
+.dl-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 0.7rem;
+}
+
+.dl-item:last-child {
+    border-bottom: none;
+}
+
+.dl-icon {
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+}
+
+.dl-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.dl-name {
+    color: #d0d0e0;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.68rem;
+}
+
+.dl-progress-bar {
+    height: 3px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    margin-top: 3px;
+    overflow: hidden;
+}
+
+.dl-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #a855f7, #ec4899);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.dl-status-text {
+    font-size: 0.62rem;
+    color: #8888a0;
+    margin-top: 2px;
+}
+
+.dl-item.completed .dl-name { color: #22c55e; }
+.dl-item.error .dl-name { color: #ef4444; }
+.dl-item.skipped .dl-name { color: #eab308; }
+.dl-item.retrying .dl-name { color: #f97316; }
 
 /* ─── Dashboard Link ───────────────── */
 .dashboard-link {
